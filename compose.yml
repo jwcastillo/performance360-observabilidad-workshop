@@ -1,0 +1,10 @@
+services:
+  grafana:
+    image: grafana/grafana:latest # La imagen oficial de Grafana
+    ports:
+      - "3000:3000" # Mapea: Puerto 3000 de mi máquina -> Puerto 3000 del contenedor Grafana
+    volumes:
+      - grafana-data:/var/lib/grafana # ¡IMPORTANTE! Guarda datos aquí para que no se pierdan
+
+volumes: # Define el 'lugar' donde se guardarán los datos
+  grafana-data: {} # Docker gestiona este volumen por nosotros

@@ -1,4 +1,12 @@
-services:
+ version: '3'
+ services:
+   loki:
+     image: grafana/loki:3.2.0
+     ports:
+       - "3100:3100"
+     volumes:
+      - ./configs/loki-config.yaml:/etc/loki/local-config.yaml
+     command: -config.file=/etc/loki/local-config.yaml
    prometheus:
      image: prom/prometheus:v2.51.0
      command:
@@ -7,13 +15,14 @@ services:
      ports:
        - "9090:9090"
    grafana:
-     environment:
-       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
-       - GF_AUTH_ANONYMOUS_ENABLED=true
-       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-       - GF_AUTH_BASIC_ENABLED=false
-       - GF_INSTALL_PLUGINS=https://storage.googleapis.com/integration-artifacts/grafana-lokiexplore-app/grafana-lokiexplore-app-latest.zip;grafana-lokiexplore-app
-     entrypoint:
+    image: grafana/grafana:latest
+    environment:
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_BASIC_ENABLED=false
+    ports:
+      - 3000:3000/tcp
+    entrypoint:
        - sh
        - -euc
        - |
@@ -40,17 +49,18 @@ services:
            editable: false
          EOF
          /run.sh
-     image: grafana/grafana:latest
-     ports:
-       - "3000:3000"
+
    alloy:
     image: grafana/alloy:latest
     ports:
       - 12345:12345
       - 4317:4317
       - 4318:4318
+    privileged: true
     volumes:
-      - ./config.alloy:/etc/alloy/config.alloy
-      - ./logs:/tmp/app-logs/
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+      - ./configs/config.alloy:/etc/alloy/config.alloy
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /:/rootfs:ro
+      - /sys:/sys:ro
+    command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data --stability.level=experimental /etc/alloy/config.alloy

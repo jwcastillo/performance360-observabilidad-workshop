@@ -8,6 +8,8 @@ services:
     depends_on:
       - db
     restart: unless-stopped
+    networks:
+      - observability
 
 
   plant_service:
@@ -18,6 +20,8 @@ services:
     depends_on:
       - db
     restart: unless-stopped
+    networks:
+      - observability
 
 
   simulation_service:
@@ -29,6 +33,8 @@ services:
       - db
       - plant_service
     restart: unless-stopped
+    networks:
+      - observability
 
 
   websocket_service:
@@ -37,6 +43,8 @@ services:
     ports:
       - "5004:5004"
     restart: unless-stopped
+    networks:
+      - observability
 
 
   bug_service:
@@ -47,6 +55,8 @@ services:
     depends_on:
       - db
     restart: unless-stopped
+    networks:
+      - observability
 
 
   main_app:
@@ -60,6 +70,8 @@ services:
       - simulation_service
       - websocket_service
     restart: unless-stopped
+    networks:
+      - observability
 
 
   db:
@@ -78,7 +90,13 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - observability 
 
 
 volumes:
   pgdata:
+
+networks:
+  observability:
+    driver: bridge

@@ -1,66 +1,88 @@
- version: '3'
- services:
-   loki:
-     image: grafana/loki:3.2.0
-     ports:
-       - "3100:3100"
-     volumes:
-      - ./configs/loki-config.yaml:/etc/loki/local-config.yaml
-     command: -config.file=/etc/loki/local-config.yaml
-   prometheus:
-     image: prom/prometheus:v2.51.0
-     command:
-       - --web.enable-remote-write-receiver
-       - --config.file=/etc/prometheus/prometheus.yml
-     ports:
-       - "9090:9090"
-   grafana:
+services:
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./configs/loki/loki-config.yaml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - observability
+      - traces
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - --web.enable-remote-write-receiver
+      - --enable-feature=native-histograms
+      - --enable-feature=exemplar-storage
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - observability
+      - traces
+  grafana:
     image: grafana/grafana:latest
     environment:
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_BASIC_ENABLED=false
+      - GF_FEATURE_TOGGLES_ENABLE=flameGraph,traceqlSearch,traceQLStreaming,correlations,metricsSummary,traceqlEditor,traceToMetrics,traceToProfiles,datatrails,accessControlOnCall,lokiLogsDataplane,exploreLogsShardSplitting,exploreMetricsUseExternalAppPlugin,exploreMetricsRelatedLogs
+      - GF_INSTALL_PLUGINS=grafana-lokiexplore-app,grafana-exploretraces-app,grafana-pyroscope-app,https://storage.googleapis.com/integration-artifacts/grafana-lokiexplore-app/grafana-lokiexplore-app-latest.zip;grafana-lokiexplore-app,https://storage.googleapis.com/integration-artifacts/grafana-exploretraces-app/grafana-exploretraces-app-latest.zip;grafana-traces-app
+
     ports:
       - 3000:3000/tcp
-    entrypoint:
-       - sh
-       - -euc
-       - |
-         mkdir -p /etc/grafana/provisioning/datasources
-         cat <<EOF > /etc/grafana/provisioning/datasources/ds.yaml
-         apiVersion: 1
-         datasources:
-         - name: Loki
-           type: loki
-           access: proxy
-           orgId: 1
-           url: http://loki:3100
-           basicAuth: false
-           isDefault: false
-           version: 1
-           editable: false
-         - name: Prometheus
-           type: prometheus
-           orgId: 1
-           url: http://prometheus:9090
-           basicAuth: false
-           isDefault: true
-           version: 1
-           editable: false
-         EOF
-         /run.sh
-
-   alloy:
+    volumes:
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning/:rw
+    networks:
+      - observability
+      - traces
+  tempo:
+    image: grafana/tempo:latest
+    command:
+      - "-storage.trace.backend=local"
+      - "-storage.trace.local.path=/tmp/tempo/traces"
+      - "-storage.trace.wal.path=/tmp/tempo/wal"
+      - "-auth.enabled=false"
+      - "-server.http-listen-port=3200"
+    ports:
+      - 3200:3200   # tempo http
+      - 9095:9095   # tempo grpc
+      - 14268:14268 # jaeger ingest
+      - 4318:4318   # otlp http
+      - 4317:4317   # otlp grpc
+    volumes:
+      - ./configs/tempo/tempo-local.yaml:/etc/tempo-local.yaml
+    networks:
+      - observability
+      - traces
+  pyroscope:
+    image: grafana/pyroscope:latest
+    ports:
+      - "4040:4040"
+    networks:
+      - observability
+      - traces
+  alloy:
     image: grafana/alloy:latest
     ports:
       - 12345:12345
-      - 4317:4317
-      - 4318:4318
     privileged: true
     volumes:
-      - ./configs/config.alloy:/etc/alloy/config.alloy
+      - ./configs/alloy/config.alloy:/etc/alloy/config.alloy
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker:/var/lib/docker:ro
       - /:/rootfs:ro
       - /sys:/sys:ro
     command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data --stability.level=experimental /etc/alloy/config.alloy
+    networks:
+      - observability
+      - traces
+networks:
+  observability:
+    driver: bridge 
+  traces:
+    name: traces
+    driver: bridge
